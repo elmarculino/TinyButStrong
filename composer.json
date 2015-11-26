@@ -11,9 +11,9 @@
             "email": "elmarculino@gmail.com"
         }
     ],
-    "minimum-stability": "dev",
+    "minimum-stability": "stable",
     "require": {
-
+        "php": ">=5.0",
     },
     "autoload": {
         "files": [
