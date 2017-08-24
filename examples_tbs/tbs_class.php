@@ -3,8 +3,8 @@
  *
  * TinyButStrong - Template Engine for Pro and Beginners
  *
- * @version 3.10.0 for PHP 5
- * @date    2015-11-08
+ * @version 3.10.1 for PHP 5
+ * @date    2015-12-03
  * @link    http://www.tinybutstrong.com Web site
  * @author  http://www.tinybutstrong.com/onlyyou.html
  * @license http://opensource.org/licenses/LGPL-3.0 LGPL-3.0
@@ -16,6 +16,7 @@
 
 // Check PHP version
 if (version_compare(PHP_VERSION,'5.0')<0) echo '<br><b>TinyButStrong Error</b> (PHP Version Check) : Your PHP version is '.PHP_VERSION.' while TinyButStrong needs PHP version 5.0 or higher. You should try with TinyButStrong Edition for PHP 4.';
+/* COMPAT#1 */
 
 // Render flags
 define('TBS_NOTHING', 0);
@@ -201,10 +202,10 @@ public function DataOpen(&$Query,$QryPrms=false) {
 	case 0: // Array
 		if (($this->SubType===1) && (is_string($Query))) $this->SubType = 2;
 		if ($this->SubType===0) {
-			$this->RecSet = &$this->SrcId;
+			$this->RecSet = &$this->SrcId; /* COMPAT#2 */
 		} elseif ($this->SubType===1) {
 			if (is_array($Query)) {
-				$this->RecSet = &$Query;
+				$this->RecSet = &$Query; /* COMPAT#3 */
 			} else {
 				$this->DataAlert('type \''.gettype($Query).'\' not supported for the Query Parameter going with \'array\' Source Type.');
 			}
@@ -228,7 +229,7 @@ public function DataOpen(&$Query,$QryPrms=false) {
 				}
 			} else {
 				if (isset($this->TBS->VarRef[$Item0])) {
-					$Var = &$this->TBS->VarRef[$Item0];
+					$Var = &$this->TBS->VarRef[$Item0]; /* COMPAT#4 */
 					$i = 1;
 				} else {
 					$i = $this->DataAlert('invalid query \''.$Query.'\' because VarRef item \''.$Item0.'\' is not found.');
@@ -503,7 +504,7 @@ public function DataFetch() {
 		$this->CurrRec = $this->SrcId->tbsdb_fetch($this->RecSet,$this->RecNum+1);
 		break;
 	case 7: // PostgreSQL
-		$this->CurrRec = pg_fetch_assoc($this->RecSet);
+		$this->CurrRec = pg_fetch_assoc($this->RecSet); /* COMPAT#5 */
 		break;
 	case 8: // SQLite
 		$this->CurrRec = sqlite_fetch_array($this->RecSet,SQLITE_ASSOC);
@@ -587,7 +588,7 @@ public $Assigned = array();
 public $ExtendedMethods = array();
 public $ErrCount = 0;
 // Undocumented (can change at any version)
-public $Version = '3.10.0';
+public $Version = '3.10.1';
 public $Charset = '';
 public $TurboBlock = true;
 public $VarPrefix = '';
@@ -798,7 +799,6 @@ public function GetBlockSource($BlockName,$AsArray=false,$DefTags=true,$ReplaceW
 	$P1 = false;
 	$Mode = ($DefTags) ? 3 : 2;
 	$PosBeg1 = 0;
-	$PosEndPrec = false;
 	while ($Loc = $this->meth_Locator_FindBlockNext($this->Source,$BlockName,$Pos,'.',$Mode,$P1,$FieldOutside)) {
 		$Nbr++;
 		$Sep = '';
@@ -1061,7 +1061,6 @@ function &meth_Locator_SectionNewBDef(&$LocR,$BlockName,$Txt,$PrmLst,$Cache) {
 
 	$Chk = true;
 	$LocLst = array();
-	$LocNbr = 0;
 	$Pos = 0;
 	$Sort = false;
 	
@@ -1077,15 +1076,8 @@ function &meth_Locator_SectionNewBDef(&$LocR,$BlockName,$Txt,$PrmLst,$Cache) {
 	if ($Cache) {
 
 		$Chk = false;
-		$PosEndPrec = -1;
 		while ($Loc = $this->meth_Locator_FindTbs($Txt,$BlockName,$Pos,'.')) {
-			
-			// Delete embeding fields
-			if ($Loc->PosBeg<$PosEndPrec) {
-				unset($LocLst[$LocNbr]);
-				$Chk = true;
-			}
-			
+
 			$LocNbr = 1 + count($LocLst);
 			$LocLst[$LocNbr] = &$Loc;
 			
@@ -1094,18 +1086,16 @@ function &meth_Locator_SectionNewBDef(&$LocR,$BlockName,$Txt,$PrmLst,$Cache) {
 			if ($Loc->Enlarged) {
 				// Enlarged
 				$Pos = $Loc->PosBeg0 + 1;
-				$PosEndPrec = $Loc->PosEnd0;
 				$Loc->Enlarged = false;
 			} else {
 				// Normal
 				$Pos = $Loc->PosBeg + 1;
-				$PosEndPrec = $Loc->PosEnd;
 			}
 
 			// Note: the plug-in may move, delete and add one or several locs.
-			// Move   : backward or forward
+			// Move   : backward or forward (will be sorted)
 			// Delete : add property DelMe=true
-			// Add    : at the end of $LocLst
+			// Add    : at the end of $LocLst (will be sorted)
 			if ($pi) {
 				$ArgLst[1] = &$Loc;
 				$this->meth_Plugin_RunAll($this->_piOnCacheField,$ArgLst);
@@ -1132,7 +1122,6 @@ function &meth_Locator_SectionNewBDef(&$LocR,$BlockName,$Txt,$PrmLst,$Cache) {
 						}
 						if ($i==$LocNbr) {
 							$Pos = $Loc->DelPos;
-							$PosEndPrec = -1;
 						}
 					} else {
 						$this->meth_Misc_Alert('','TBS is not able to merge the field '.$LocSrc.' because the entity targeted by parameter \'att\' cannot be found.');
@@ -1143,34 +1132,18 @@ function &meth_Locator_SectionNewBDef(&$LocR,$BlockName,$Txt,$PrmLst,$Cache) {
 			unset($Loc);
 			
 		}
-		
-		// Delete loc
-		/*
-		$iMax = count($LocLst);
-		$LocNbr = 0;
-		for ($i=1;$i<=$iMax;$i++) {
-			if (isset($LocLst[$i]->DelMe) && $LocLst[$i]->DelMe) {
-				unset($LocLst[$i]);
-			} else {
-				$LocNbr++;
-				if ($LocNbr !== $i) {
-					$LocLst[$LocNbr] = $LocLst[$i];
-					unset($LocLst[$i]);
-				}
-			}
-		}
-		*/
-		
-		// Re-order loc
-		self::f_Loc_Sort($LocLst, 1);
 
+		// Re-order loc
+		$e = self::f_Loc_Sort($LocLst, true, 1);
+		$Chk = ($e > 0);
+		
 	}
 
 	// Create the object
 	$o = (object) null;
 	$o->Prm = $PrmLst;
 	$o->LocLst = $LocLst;
-	$o->LocNbr = $LocNbr;
+	$o->LocNbr = count($LocLst);
 	$o->Name = $BlockName;
 	$o->Src = $Txt;
 	$o->Chk = $Chk;
@@ -4309,24 +4282,48 @@ static function f_Loc_Moving(&$LocM, &$LocLst) {
 }
 
 /**
- * Sort the locators in the list.
- * Apply the bubble algorithm.
+ * Sort the locators in the list. Apply the bubble algorithm.
+ * Deleted locators maked with DelMe.
+ * @param array   $LocLst An array of locators.
+ * @param boolean $DelEmbd True to deleted locators that embded other ones.
+ * @param boolean $iFirst Index of the first item.
+ * @return integer Return the number of met embedding locators.
  */
-static function f_Loc_Sort(&$LocLst, $iFirst = 0) {
-	$iEnd = count($LocLst) + $iFirst;
-	for ($i = $iFirst+1 ; $i<$iEnd ; $i++) {
+static function f_Loc_Sort(&$LocLst, $DelEmbd, $iFirst = 0) {
+
+	$iLast = $iFirst + count($LocLst) - 1;
+	$embd = 0;
+	
+	for ($i = $iLast ; $i>=$iFirst ; $i--) {
 		$Loc = $LocLst[$i];
-		$p = $Loc->PosBeg;
-		for ($j=$i-1; $j>=$iFirst ; $j--) {
-			if ($p < $LocLst[$j]->PosBeg) {
-				$LocLst[$j+1] = $LocLst[$j];
+		$d = (isset($Loc->DelMe) && $Loc->DelMe);
+		$b = $Loc->PosBeg;
+		$e = $Loc->PosEnd;
+		for ($j=$i+1; $j<=$iLast ; $j++) {
+			// If DelMe, then the loc will be put at the end and deleted
+			$jb = $LocLst[$j]->PosBeg;
+			if ($d || ($b > $jb)) {
+				$LocLst[$j-1] = $LocLst[$j];
 				$LocLst[$j] = $Loc;
+			} elseif ($e > $jb) {
+				$embd++;
+				if ($DelEmbd) {
+					$d = true;
+					$j--; // replay the current position
+				} else {
+					$j = $iLast; // quit the loop
+				}
 			} else {
-				$j = -1; // quit the loop
+				$j = $iLast; // quit the loop
 			}
 		}
+		if ($d) {
+			unset($LocLst[$iLast]);
+			$iLast--;
+		}
 	}
-	return true;
+	
+	return $embd;
 }
 
 /**
@@ -4627,13 +4624,14 @@ static function f_Xml_FindTagStart(&$Txt,$Tag,$Opening,$PosBeg,$Forward,$Case=tr
 		do {
 			if ($Forward) $p = strpos($Txt,$x,$p+1);  else $p = strrpos(substr($Txt,0,$p+1),$x);
 			if ($p===false) return false;
-			if (substr($Txt,$p,$xl)!==$x) continue; // For PHP 4 only
+			/* COMPAT#6 */
 			$z = substr($Txt,$p+$xl,1);
 		} while ( ($z!==' ') && ($z!=="\r") && ($z!=="\n") && ($z!=='>') && ($z!=='/') && ($Tag!=='/') && ($Tag!=='') );
 	} else {
 		do {
 			if ($Forward) $p = stripos($Txt,$x,$p+1);  else $p = strripos(substr($Txt,0,$p+1),$x);
 			if ($p===false) return false;
+			/* COMPAT#7 */
 			$z = substr($Txt,$p+$xl,1);
 		} while ( ($z!==' ') && ($z!=="\r") && ($z!=="\n") && ($z!=='>') && ($z!=='/') && ($Tag!=='/') && ($Tag!=='') );
 	}
